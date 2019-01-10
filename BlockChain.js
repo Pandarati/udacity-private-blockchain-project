@@ -47,11 +47,11 @@ class Blockchain {
         // 3. send a new block to the persistence layer...
         let self = this;
         block.timeStamp = new Date().getTime().toString().slice(0,-3);
-        block.hash = SHA256(JSON.stringify(block)).toString();
         block.height = this.count;
 
         return new Promise(function(resolve, reject) {
             if (self._isGenesisBlockToBeAdded()) {
+                block.hash = SHA256(JSON.stringify(block)).toString();
                 self.bd.addLevelDBData(block.height, block).then(() => {
                     self.count++;
                     resolve(block);
@@ -63,6 +63,7 @@ class Blockchain {
                 // we need to link between two adjacent blocks.
                 self._getPreviousBlock().then(previousBlock => {
                     block.previousHash = previousBlock.hash;
+                    block.hash = SHA256(JSON.stringify(block)).toString();
                     return self.bd.addLevelDBData(block.height, block);
                 }).then(() => {
                     self.count++;
@@ -93,25 +94,34 @@ class Blockchain {
                 reject(error);
             })
         });
+
+        // return this.getBlock(this.count - 1);
     }
 
     // Get Block By Height
     getBlock(height) {
         // Add your code here
-        this.bd.getLevelDBData(height).then(block => {
-            return new Promise(function(resolve, reject) {
+        let self = this;
+        return new Promise(function(resolve, reject) {
+            self.bd.getLevelDBData(height).then(block => {
                 resolve(block);
-            });
-        }).catch(error => {
-            return new Promise(function(resolve, reject) {
+            }).catch(error => {
+                if (error.notFound) {
+                    console.log('not found!');
+                }
                 reject(error);
-            });
+            })
         });
     }
 
     // Validate if Block is being tampered by Block Height
     validateBlock(height) {
         // Add your code here
+        return this.getBlock(height).then(block => {
+            var persistentBlockHash = block.hash;
+            block.hash = '';
+            return persistentBlockHash == SHA256(JSON.stringify(block)).toString();
+        });
     }
 
     // Validate Blockchain

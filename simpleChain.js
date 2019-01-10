@@ -15,7 +15,7 @@ setTimeout(function () {
  ** Function for Create Tests Blocks   ****
  ******************************************/
 
-
+/*
 (function theLoop (i) {
 	setTimeout(function () {
 		let blockTest = new Block.Block("Test Block - " + (i + 1));
@@ -27,18 +27,18 @@ setTimeout(function () {
 		});
 	}, 1000);
   })(0);
-
+*/
 
 /***********************************************
  ** Function to get the Height of the Chain ****
  ***********************************************/
 
-/*
+
 // Be careful this only will work if `getBlockHeight` method in Blockchain.js file return a Promise
 myBlockChain.getBlockHeight().then((height) => {
 	console.log(height);
 }).catch((err) => { console.log(err);});
-*/
+
 
 /***********************************************
  ******** Function to Get a Block  *************
@@ -66,7 +66,7 @@ myBlockChain.validateBlock(0).then((valid) => {
 */
 
 /** Tampering a Block this is only for the purpose of testing the validation methods */
-/*
+
 myBlockChain.getBlock(5).then((block) => {
 	let blockAux = block;
 	blockAux.body = "Tampered Block";
