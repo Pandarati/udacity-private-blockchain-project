@@ -9,6 +9,7 @@ const Block = require('./Block.js');
 class Blockchain {
 
     constructor() {
+        this.count = 0;
         this.bd = new LevelSandbox.LevelSandbox();
         this.generateGenesisBlock();
     }
@@ -19,21 +20,93 @@ class Blockchain {
     // will not create the genesis block
     generateGenesisBlock(){
         // Add your code here
+        let data = {};
+
+        let genesisBlock = new Block.Block('this is the genesis block.');
+        this.addBlock(genesisBlock);
     }
 
     // Get block height, it is a helper method that return the height of the blockchain
     getBlockHeight() {
         // Add your code here
+        this.bd.getLevelDBData(height).then(block => {
+            return new Promise(function(resolve, reject) {
+                resolve(block.height);
+            });
+        }).catch(error => {
+            return new Promise(function(resolve, reject) {
+                reject(error);
+            });
+        });
     }
 
     // Add new block
     addBlock(block) {
-        // Add your code here
+        // 1. link between the previous and the current block.
+        // 2. use block height as a key when getting the previous block from levelDB.
+        // 3. send a new block to the persistence layer...
+        let self = this;
+        block.timeStamp = new Date().getTime().toString().slice(0,-3);
+        block.hash = SHA256(JSON.stringify(block)).toString();
+        block.height = this.count;
+
+        return new Promise(function(resolve, reject) {
+            if (self._isGenesisBlockToBeAdded()) {
+                self.bd.addLevelDBData(block.height, block).then(() => {
+                    self.count++;
+                    resolve(block);
+                }).catch(error => {
+                    console.log("failed to add to db.");
+                    reject(error);
+                })
+            } else {
+                // we need to link between two adjacent blocks.
+                self._getPreviousBlock().then(previousBlock => {
+                    block.previousHash = previousBlock.hash;
+                    return self.bd.addLevelDBData(block.height, block);
+                }).then(() => {
+                    self.count++;
+                    resolve(block);
+                }).catch(error => {
+                    console.log("fatal : cannot find the previous block.");
+                    // TODO how to exit a JavaScript Program?
+                    reject(error);
+                });
+
+            }
+        });
+    }
+
+    _isGenesisBlockToBeAdded() {
+        return this.count == 0;
+    }
+
+    _getPreviousBlock() {
+        let self = this;
+        return new Promise(function(resolve, reject) {
+            self.bd.getLevelDBData(self.count - 1).then(previousBlock => {
+                resolve(previousBlock);
+            }).catch(error => {
+                if (error.notFound) {
+                    console.log('not found!');
+                }
+                reject(error);
+            })
+        });
     }
 
     // Get Block By Height
     getBlock(height) {
         // Add your code here
+        this.bd.getLevelDBData(height).then(block => {
+            return new Promise(function(resolve, reject) {
+                resolve(block);
+            });
+        }).catch(error => {
+            return new Promise(function(resolve, reject) {
+                reject(error);
+            });
+        });
     }
 
     // Validate if Block is being tampered by Block Height
@@ -58,5 +131,13 @@ class Blockchain {
     }
    
 }
+
+//(function dbTest () {
+//    let levelSandbox = new LevelSandbox.LevelSandbox();
+//    levelSandbox.getLevelDBData(1).then(value => {
+//        console.log('hello world wha is your ? ' + value);
+//    });
+//
+//})();
 
 module.exports.Blockchain = Blockchain;
