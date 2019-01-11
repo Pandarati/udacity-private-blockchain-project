@@ -9,7 +9,6 @@ const Block = require('./Block.js');
 class Blockchain {
 
     constructor() {
-        this.count = 0;
         this.bd = new LevelSandbox.LevelSandbox();
         this.generateGenesisBlock();
     }
@@ -20,72 +19,60 @@ class Blockchain {
     // will not create the genesis block
     generateGenesisBlock(){
         // Add your code here
-        let data = {};
-
+        let self = this;
         let genesisBlock = new Block.Block('this is the genesis block.');
-        this.addBlock(genesisBlock);
+
+        this.isEmptyChain().then(isEmpty => {
+            if (isEmpty) {
+                genesisBlock.timeStamp = new Date().getTime().toString().slice(0,-3);
+                genesisBlock.height = 0;
+                genesisBlock.hash = SHA256(JSON.stringify(genesisBlock)).toString();
+                self.bd.addLevelDBData(genesisBlock.height, JSON.stringify(genesisBlock)).then(() => {
+                    self.bd.addLevelDBData('count', 1);
+                })
+            }
+        });
+    }
+
+    isEmptyChain() {
+        return this.bd.getBlocksCount().then(count => {
+            return count == 0;
+        });
     }
 
     // Get block height, it is a helper method that return the height of the blockchain
     getBlockHeight() {
         // Add your code here
-        this.bd.getLevelDBData(height).then(block => {
-            return new Promise(function(resolve, reject) {
-                resolve(block.height);
-            });
-        }).catch(error => {
-            return new Promise(function(resolve, reject) {
-                reject(error);
-            });
+        return this.bd.getBlocksCount().then(count => {
+            return count - 1;
         });
     }
 
     // Add new block
     addBlock(block) {
-        // 1. link between the previous and the current block.
-        // 2. use block height as a key when getting the previous block from levelDB.
-        // 3. send a new block to the persistence layer...
         let self = this;
         block.timeStamp = new Date().getTime().toString().slice(0,-3);
-        block.height = this.count;
-
-        return new Promise(function(resolve, reject) {
-            if (self._isGenesisBlockToBeAdded()) {
+        return this.bd.getBlocksCount().then(count => {
+            block.height = count;
+            return block;
+        }).then(block => {
+            return self.bd.addLevelDBData('count', block.height + 1);
+        }).then((value) => {
+            let promise = self._getPreviousBlock(block.height).then(previousBlock => {
+                let previousBlockObj = JSON.parse(previousBlock);
+                block.previousHash = previousBlockObj.hash;
                 block.hash = SHA256(JSON.stringify(block)).toString();
-                self.bd.addLevelDBData(block.height, block).then(() => {
-                    self.count++;
-                    resolve(block);
-                }).catch(error => {
-                    console.log("failed to add to db.");
-                    reject(error);
-                })
-            } else {
-                // we need to link between two adjacent blocks.
-                self._getPreviousBlock().then(previousBlock => {
-                    block.previousHash = previousBlock.hash;
-                    block.hash = SHA256(JSON.stringify(block)).toString();
-                    return self.bd.addLevelDBData(block.height, block);
-                }).then(() => {
-                    self.count++;
-                    resolve(block);
-                }).catch(error => {
-                    console.log("fatal : cannot find the previous block.");
-                    // TODO how to exit a JavaScript Program?
-                    reject(error);
-                });
+                return self.bd.addLevelDBData(block.height, JSON.stringify(block));
+            });
+            return promise;
 
-            }
         });
     }
 
-    _isGenesisBlockToBeAdded() {
-        return this.count == 0;
-    }
-
-    _getPreviousBlock() {
+    _getPreviousBlock(height) {
         let self = this;
         return new Promise(function(resolve, reject) {
-            self.bd.getLevelDBData(self.count - 1).then(previousBlock => {
+            self.bd.getLevelDBData(height - 1).then(previousBlock => {
                 resolve(previousBlock);
             }).catch(error => {
                 if (error.notFound) {
@@ -104,7 +91,7 @@ class Blockchain {
         let self = this;
         return new Promise(function(resolve, reject) {
             self.bd.getLevelDBData(height).then(block => {
-                resolve(block);
+                resolve(JSON.parse(block));
             }).catch(error => {
                 if (error.notFound) {
                     console.log('not found!');
@@ -118,7 +105,7 @@ class Blockchain {
     validateBlock(height) {
         // Add your code here
         return this.getBlock(height).then(block => {
-            var persistentBlockHash = block.hash;
+            let persistentBlockHash = block.hash;
             block.hash = '';
             return persistentBlockHash == SHA256(JSON.stringify(block)).toString();
         });
@@ -127,6 +114,24 @@ class Blockchain {
     // Validate Blockchain
     validateChain() {
         // Add your code here
+        let self = this;
+        let promises = [];
+        return this.getBlockHeight().then(count => {
+            for (let i = 0; i < count; i++) {
+                let promise = self.validateBlock(i);
+                promises.push(promise);
+            }
+
+            let promise = Promise.all(promises).then(values => {
+                let invalidBlockPromises = values.filter(isValid => {
+                    return !isValid;
+                });
+                return invalidBlockPromises;
+            })
+
+            return promise;
+        });
+
     }
 
     // Utility Method to Tamper a Block for Test Validation
@@ -141,13 +146,5 @@ class Blockchain {
     }
    
 }
-
-//(function dbTest () {
-//    let levelSandbox = new LevelSandbox.LevelSandbox();
-//    levelSandbox.getLevelDBData(1).then(value => {
-//        console.log('hello world wha is your ? ' + value);
-//    });
-//
-//})();
 
 module.exports.Blockchain = Blockchain;
