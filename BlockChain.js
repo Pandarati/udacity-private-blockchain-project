@@ -117,16 +117,19 @@ class Blockchain {
         let self = this;
         let promises = [];
         return this.getBlockHeight().then(count => {
-            for (let i = 0; i < count; i++) {
+            for (let i = 0; i <= count; i++) {
                 let promise = self.validateBlock(i);
                 promises.push(promise);
             }
 
             let promise = Promise.all(promises).then(values => {
-                let invalidBlockPromises = values.filter(isValid => {
-                    return !isValid;
-                });
-                return invalidBlockPromises;
+                let invalidBlocks = [];
+                for (let i = 0; i < values.length; i++) {
+                    if (values[i] == false) {
+                        invalidBlocks.push(i);
+                    }
+                }
+                return invalidBlocks;
             })
 
             return promise;
